@@ -1,58 +1,85 @@
-# Step 1: 数据加载与预处理（四分类，BCI Competition IIIa）
-
 import os
 import numpy as np
 import mne
 from sklearn.model_selection import train_test_split
 
 # ========== 配置 ==========
-DATA_DIR = '.venv/k3b.gdf'  # 存放 GDF 文件的目录
+DATA_DIR = './data'  
 SUBJECTS = ['S1IIIa', 'S2IIIa', 'S3IIIa']
 BANDPASS = (1.0, 50.0)  # 带通滤波范围 (Hz)
-NOTCH_FREQS = np.arange(50, 126, 50)  # 正确写法，仅限 Nyquist 以内
- # 50Hz 工频陷波
+NOTCH_FREQS = np.arange(50, 126, 50)  # 50Hz 工频陷波
 TMIN, TMAX = 3.0, 7.0  # MI 想象窗口 (s)
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 
+# MNE 使用的事件映射：字符串 → int（注意是 event_code，不是 label）
+MNE_EVENT_ID = {
+    '769': 1,  # 左手
+    '770': 2,  # 右手
+    '771': 3,  # 脚
+    '772': 4   # 舌头
+}
+
+# 标签映射（用于训练 y）
+LABEL_MAP = {
+    '769': 0,
+    '770': 1,
+    '771': 2,
+    '772': 3
+}
 
 # ========== 加载 & 预处理函数 ==========
 def load_and_preprocess(subject):
-    # 1. 读取原始 GDF
+    print(f"\n加载被试数据: {subject}")
     fpath = os.path.join(DATA_DIR, f'{subject}.gdf')
     raw = mne.io.read_raw_gdf(fpath, preload=True)
 
-    # 2. 通道选取：只保留 EEG 通道
+    # 只保留 EEG 通道
     eeg_picks = mne.pick_types(raw.info, eeg=True, eog=False)
     raw.pick(eeg_picks)
 
-    # 3. 参考重设（若需）
-    # raw.set_eeg_reference(ref_channels=['M1', 'M2'])
-
-    # 4. 滤波
+    # 滤波
     raw.filter(BANDPASS[0], BANDPASS[1], fir_design='firwin')
     raw.notch_filter(NOTCH_FREQS, fir_design='firwin')
 
-    # 5. 可选 ICA 去伪迹（视数据质量而定）
-    # ica = mne.preprocessing.ICA(n_components=20, random_state=RANDOM_STATE)
-    # ica.fit(raw)
-    # raw = ica.apply(raw)
+    # 提取注释（annotations）
+    annotations = raw.annotations
+    print("Used Annotations descriptions:", set(annotations.description))
 
-    # 6. 提取事件 & Epochs
-    events, event_id = mne.events_from_annotations(raw)
-    # event_id 示例： {'769': 0, '770': 1, '771': 2, '772': 3}
+    # 构建事件数组和标签数组
+    selected_events = []
+    labels = []
+    sfreq = raw.info['sfreq']
 
+    for ann in annotations:
+        desc = ann['description']
+        if desc in MNE_EVENT_ID:
+            sample = int(ann['onset'] * sfreq)
+            selected_events.append([sample, 0, MNE_EVENT_ID[desc]])  # MNE 事件
+            labels.append(LABEL_MAP[desc])  # 自定义标签 0~3
+
+    selected_events = np.array(selected_events)
+    labels = np.array(labels)
+
+    print(f"筛选后事件数量: {len(selected_events)}")
+
+    if len(selected_events) == 0:
+        raise RuntimeError(f'未找到指定的运动想象事件！被试: {subject}')
+
+    # 创建 Epochs
     epochs = mne.Epochs(
-        raw, events, event_id=event_id,
+        raw, selected_events, event_id=MNE_EVENT_ID,
         tmin=TMIN, tmax=TMAX,
-        baseline=None, preload=True,
-        event_repeated = 'merge'  # 新增这一行
+        baseline=None,
+        preload=True,
+        event_repeated='merge'
     )
-    X = epochs.get_data()  # (n_epochs, n_channels, n_times)
-    y = epochs.events[:, -1]  # 0,1,2,3 四分类标签
 
+    X = epochs.get_data()  # shape: (n_epochs, n_channels, n_times)
+    y = labels
+
+    print(f"数据形状: X={X.shape}, y={y.shape}")
     return X, y
-
 
 # ========== 合并所有被试 ==========
 X_all, y_all = [], []
@@ -63,7 +90,7 @@ for subj in SUBJECTS:
 
 X_all = np.concatenate(X_all, axis=0)
 y_all = np.concatenate(y_all, axis=0)
-print(f'全部数据：X_all shape = {X_all.shape}, y_all shape = {y_all.shape}')
+print(f'\n全部数据：X_all shape = {X_all.shape}, y_all shape = {y_all.shape}')
 
 # ========== 划分训练/测试 ==========
 X_train, X_test, y_train, y_test = train_test_split(
@@ -81,4 +108,4 @@ np.savez_compressed(
     X_test=X_test, y_test=y_test
 )
 
-print('Step 1 完成：数据已预处理并保存为 IIIa_data.npz')
+print('\n✅ Step 1 完成：数据已预处理并保存为 IIIa_data.npz')
