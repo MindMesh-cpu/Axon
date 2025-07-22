@@ -1,0 +1,59 @@
+class EEGDataset(Dataset):
+    def __init__(self, npz_path, train=True, mean=None, std=None, fs=250):
+        data = np.load(npz_path)
+        if train:
+            self.X = data['X_train']
+            self.y = data['y_train']
+        else:
+            self.X = data['X_test']
+            self.y = data['y_test']
+
+        # 基础预处理：带通滤波
+        self.X = np.array([bandpass_filter(x, lowcut=1, highcut=40, fs=fs) for x in self.X])
+        self.X = self.X.astype(np.float32)
+
+        # 标准化
+        if train:
+            self.mean = self.X.mean(axis=(0, 2), keepdims=True)
+            self.std = self.X.std(axis=(0, 2), keepdims=True)
+            self.std[self.std == 0] = 1e-6
+        else:
+            assert mean is not None and std is not None, "测试集需要训练集的mean和std"
+            self.mean = mean
+            self.std = std
+
+        self.X = (self.X - self.mean) / self.std
+        self.X = torch.tensor(self.X, dtype=torch.float32)
+        self.y = torch.tensor(self.y, dtype=torch.long)
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, idx):
+        return self.X[idx], self.y[idx]
+
+# 数据增强（训练时酌情调参） 
+def mixup_data(x, y, alpha=0.2):
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size).to(x.device)
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+def channel_dropout(x, p=0.1):
+    mask = (torch.rand(x.shape[0], x.shape[1], 1, device=x.device) > p).float()
+    return x * mask
+
+def random_time_crop(x, window_size=600):
+    T = x.shape[2]
+    if T <= window_size:
+        return x
+    start = np.random.randint(0, T - window_size)
+    return x[:, :, start:start + window_size]
+
+def add_noise(x, std=0.01):
+    return x + std * torch.randn_like(x)
