@@ -2,8 +2,6 @@ import os
 import numpy as np
 import mne
 from sklearn.model_selection import train_test_split
-
-# ========== 配置 ==========
 DATA_DIR = './data'  
 SUBJECTS = ['S1IIIa', 'S2IIIa', 'S3IIIa']
 BANDPASS = (1.0, 50.0)  # 带通滤波范围 (Hz)
@@ -12,7 +10,7 @@ TMIN, TMAX = 3.0, 7.0  # MI 想象窗口 (s)
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 
-# MNE 使用的事件映射：字符串 → int（注意是 event_code，不是 label）
+# MNE 使用的事件映射：字符串 → int
 MNE_EVENT_ID = {
     '769': 1,  # 左手
     '770': 2,  # 右手
@@ -28,7 +26,7 @@ LABEL_MAP = {
     '772': 3
 }
 
-# ========== 加载 & 预处理函数 ==========
+#预处理函数 
 def load_and_preprocess(subject):
     print(f"\n加载被试数据: {subject}")
     fpath = os.path.join(DATA_DIR, f'{subject}.gdf')
@@ -81,7 +79,7 @@ def load_and_preprocess(subject):
     print(f"数据形状: X={X.shape}, y={y.shape}")
     return X, y
 
-# ========== 合并所有被试 ==========
+#合并
 X_all, y_all = [], []
 for subj in SUBJECTS:
     X, y = load_and_preprocess(subj)
@@ -92,7 +90,7 @@ X_all = np.concatenate(X_all, axis=0)
 y_all = np.concatenate(y_all, axis=0)
 print(f'\n全部数据：X_all shape = {X_all.shape}, y_all shape = {y_all.shape}')
 
-# ========== 划分训练/测试 ==========
+# 划分训练/测试 
 X_train, X_test, y_train, y_test = train_test_split(
     X_all, y_all,
     test_size=TEST_SIZE,
@@ -101,11 +99,11 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 print(f'训练集：{X_train.shape}, 测试集：{X_test.shape}')
 
-# ========== 保存为 .npz ==========
+# 保存为 .npz
 np.savez_compressed(
     os.path.join(DATA_DIR, 'IIIa_data.npz'),
     X_train=X_train, y_train=y_train,
     X_test=X_test, y_test=y_test
 )
 
-print('\n✅ Step 1 完成：数据已预处理并保存为 IIIa_data.npz')
+print('数据已预处理并保存为 IIIa_data.npz')
