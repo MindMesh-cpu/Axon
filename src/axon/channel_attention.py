@@ -1,3 +1,5 @@
+import torch.nn as nn
+
 class ChannelAttention(nn.Module):
     def __init__(self, channels, reduction=4, dropout=0.1):
         super().__init__()

@@ -1,157 +1,21 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader, random_split
-import numpy as np
-from scipy.signal import butter, lfilter
+from torch.utils.data import DataLoader, random_split
 
-# 基础预处理：带通滤波 
-def butter_bandpass(lowcut, highcut, fs, order=4):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-def bandpass_filter(data, lowcut=1, highcut=40, fs=250, order=4):
-    # data shape: (..., channels, time)
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    return lfilter(b, a, data, axis=-1)
-
-# 数据集 
-class EEGDataset(Dataset):
-    def __init__(self, npz_path, train=True, mean=None, std=None, fs=250):
-        data = np.load(npz_path)
-        if train:
-            self.X = data['X_train']
-            self.y = data['y_train']
-        else:
-            self.X = data['X_test']
-            self.y = data['y_test']
-
-        # 带通滤波
-        self.X = np.array([bandpass_filter(x, lowcut=1, highcut=40, fs=fs) for x in self.X])
-        self.X = self.X.astype(np.float32)
-
-        # 标准化
-        if train:
-            self.mean = self.X.mean(axis=(0, 2), keepdims=True)
-            self.std = self.X.std(axis=(0, 2), keepdims=True)
-            self.std[self.std == 0] = 1e-6
-        else:
-            assert mean is not None and std is not None, "测试集需要训练集的mean和std"
-            self.mean = mean
-            self.std = std
-
-        self.X = (self.X - self.mean) / self.std
-        self.X = torch.tensor(self.X, dtype=torch.float32)
-        self.y = torch.tensor(self.y, dtype=torch.long)
-
-    def __len__(self):
-        return len(self.y)
-
-    def __getitem__(self, idx):
-        return self.X[idx], self.y[idx]
-
-# 数据增强（训练时酌情摸奖）
-def mixup_data(x, y, alpha=0.2):
-    if alpha > 0:
-        lam = np.random.beta(alpha, alpha)
-    else:
-        lam = 1
-    batch_size = x.size(0)
-    index = torch.randperm(batch_size).to(x.device)
-    mixed_x = lam * x + (1 - lam) * x[index, :]
-    y_a, y_b = y, y[index]
-    return mixed_x, y_a, y_b, lam
-
-def channel_dropout(x, p=0.1):
-    mask = (torch.rand(x.shape[0], x.shape[1], 1, device=x.device) > p).float()
-    return x * mask
-
-def random_time_crop(x, window_size=600):
-    T = x.shape[2]
-    if T <= window_size:
-        return x
-    start = np.random.randint(0, T - window_size)
-    return x[:, :, start:start + window_size]
-
-def add_noise(x, std=0.01):
-    return x + std * torch.randn_like(x)
-
-# 模型组件
-class DeepStackedTemporalConv(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-        self.conv1 = nn.Conv1d(channels, channels, kernel_size=5, padding=2)
-        self.bn1 = nn.BatchNorm1d(channels)
-        self.conv2 = nn.Conv1d(channels, channels, kernel_size=5, padding=2)
-        self.bn2 = nn.BatchNorm1d(channels)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        identity = x
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out += identity
-        out = self.relu(out)
-        return out
-
-class DynamicMultiScaleTimeConv(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-        self.conv1 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm1d(channels)
-        self.conv2 = nn.Conv1d(channels, channels, kernel_size=7, padding=3)
-        self.bn2 = nn.BatchNorm1d(channels)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        identity = x
-        out1 = self.conv1(x)
-        out1 = self.bn1(out1)
-        out1 = self.relu(out1)
-        out2 = self.conv2(x)
-        out2 = self.bn2(out2)
-        out2 = self.relu(out2)
-        out = out1 + out2 + identity
-        out = self.relu(out)
-        return out
-
-class DynamicChannelFusion(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-        self.conv = nn.Conv1d(channels, channels, kernel_size=1)
-        self.bn = nn.BatchNorm1d(channels)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.bn(out)
-        out = self.relu(out)
-        return out
-
-class ChannelAttention(nn.Module):
-    def __init__(self, channels, reduction=4, dropout=0.1):
-        super().__init__()
-        self.avg_pool = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Sequential(
-            nn.Linear(channels, channels // reduction),
-            nn.LayerNorm(channels // reduction),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(channels // reduction, channels),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        b, c, _ = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1)
-        return x * y.expand_as(x)
+from axon.channel_attention import ChannelAttention
+from axon.fusion_block import (
+    DeepStackedTemporalConv,
+    DynamicMultiScaleTimeConv,
+    DynamicChannelFusion,
+)
+from axon.eeg_dataset import (
+    EEGDataset,
+    mixup_data,
+    channel_dropout,
+    random_time_crop,
+    add_noise,
+)
 
 class TemporalAttention(nn.Module):
     def __init__(self, channels, hidden_dim=128):

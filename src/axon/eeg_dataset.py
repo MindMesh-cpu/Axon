@@ -1,3 +1,19 @@
+import numpy as np
+import torch
+from scipy.signal import butter, lfilter
+from torch.utils.data import Dataset
+
+def butter_bandpass(lowcut, highcut, fs, order=4):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+def bandpass_filter(data, lowcut=1, highcut=40, fs=250, order=4):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    return lfilter(b, a, data, axis=-1)
+
 class EEGDataset(Dataset):
     def __init__(self, npz_path, train=True, mean=None, std=None, fs=250):
         data = np.load(npz_path)
