@@ -1,4 +1,6 @@
-#深层时间卷积残差块
+import torch.nn as nn
+
+# 深层时间卷积残差块
 class DeepStackedTemporalConv(nn.Module):
     def __init__(self, channels):
         super().__init__()
@@ -18,7 +20,9 @@ class DeepStackedTemporalConv(nn.Module):
         out += identity
         out = self.relu(out)
         return out
-#多尺度时间卷积
+
+
+# 多尺度时间卷积
 class DynamicMultiScaleTimeConv(nn.Module):
     def __init__(self, channels):
         super().__init__()
@@ -39,7 +43,9 @@ class DynamicMultiScaleTimeConv(nn.Module):
         out = out1 + out2 + identity
         out = self.relu(out)
         return out
-#通道融合
+
+
+# 通道融合
 class DynamicChannelFusion(nn.Module):
     def __init__(self, channels):
         super().__init__()
