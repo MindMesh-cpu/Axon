@@ -1,5 +1,5 @@
 #深层时间卷积残差块
-class DeepStackedTemporalConv(nn.Module):
+class DeepTemporalBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
         self.conv1 = nn.Conv1d(channels, channels, kernel_size=5, padding=2)
@@ -19,7 +19,7 @@ class DeepStackedTemporalConv(nn.Module):
         out = self.relu(out)
         return out
 #多尺度时间卷积
-class DynamicMultiScaleTimeConv(nn.Module):
+class MsConvBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
         self.conv1 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
@@ -40,7 +40,7 @@ class DynamicMultiScaleTimeConv(nn.Module):
         out = self.relu(out)
         return out
 #通道融合
-class DynamicChannelFusion(nn.Module):
+class Fusion(nn.Module):
     def __init__(self, channels):
         super().__init__()
         self.conv = nn.Conv1d(channels, channels, kernel_size=1)
