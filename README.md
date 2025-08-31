@@ -1,11 +1,12 @@
-EEG Signal Classification with Deep Temporal-Channel Fusion Networks
+EEG Signal Classification Based on Deep Temporal–Channel Fusion Networks
 
-This project implements a deep learning model for EEG signal classification, incorporating advanced temporal and channel attention mechanisms. The model includes preprocessing with bandpass filtering, data augmentation techniques (such as mixup and channel dropout), and a multi-scale convolutional architecture designed to capture rich temporal and spatial features in EEG data. It supports training, validation, and testing, with automatic checkpointing for the best model.
+My primary objective is to explore EEG signal classification for motor imagery (MI) tasks under small-sample conditions. After experimenting with several non-Transformer models, I decided to integrate strengths from multiple studies to construct a more interpretable network structure: temporal features are captured through multi-receptive-field convolutions applied on single-channel time series; cross-channel relationships are modeled via fully connected layers; and both temporal and spatial attention mechanisms are incorporated to enhance discriminative power.
 
-The validation accuracy ranges between 60%–70%, and the best test set results are around 55%–65%. The experiments were conducted using a small-scale NVIDIA T4 GPU provided by Alibaba Cloud, and further hyperparameter tuning and ablation studies have yet to be performed. The preliminary results slightly outperform the baseline EEGNet.
+In my experiments, I found that baseline models such as EEGNet often fail to converge or reproduce the reported results without extensive preprocessing. In contrast, my proposed structure, combined with bandpass filtering, MixUp, channel dropout, and other preprocessing and data augmentation techniques, can effectively fit the data and outperform the baselines. This demonstrates not only the gap between traditional models and practical applications, but also the feasibility of combining multi-receptive-field convolutions with attention mechanisms.
 
-While the model structure is not highly innovative (mainly modular stacking and enhancing receptive fields with multi-layer convolutions for temporal extraction), it achieves a good balance between efficiency and accuracy. Building on this, the approach has great potential and scalability for practical applications in Motor Imagery (MI) signal recognition, especially when combined with transfer learning and further investigation into MI signal classification under different mental states.
+On the validation set, my model achieves an accuracy of 60%–70%, while the best test results are around 55%–65%, showing a noticeable improvement over EEGNet. The experiments were conducted on a small-scale NVIDIA T4 GPU provided by Alibaba Cloud, and extensive hyperparameter tuning or systematic ablation studies have not yet been performed.
 
-Approximate structure：
+Although the model structure is not highly innovative (mainly relying on modular stacking and multi-scale convolutions to strengthen temporal feature extraction), it achieves a good balance between efficiency and accuracy. In the next step, I plan to incorporate an improved lightweight attention mechanism on top of EEGPT embeddings to enhance cross-subject generalization and further investigate MI signal classification under different mental states.
 
- Temporal Feature Extraction-> Channel Feature Extraction-> Attention Modules）-> Fusion Module->Classifier
+Overall structure:
+Temporal feature extraction → Channel feature modeling → Attention modules → Fusion module → Classifier
