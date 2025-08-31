@@ -80,7 +80,7 @@ def add_noise(x, std=0.01):
     return x + std * torch.randn_like(x)
 
 # 模型组件
-class DeepStackedTemporalConv(nn.Module):
+class DeepTemporalBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
         self.conv1 = nn.Conv1d(channels, channels, kernel_size=5, padding=2)
@@ -100,7 +100,7 @@ class DeepStackedTemporalConv(nn.Module):
         out = self.relu(out)
         return out
 
-class DynamicMultiScaleTimeConv(nn.Module):
+class MsConvBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
         self.conv1 = nn.Conv1d(channels, channels, kernel_size=3, padding=1)
@@ -121,7 +121,7 @@ class DynamicMultiScaleTimeConv(nn.Module):
         out = self.relu(out)
         return out
 
-class DynamicChannelFusion(nn.Module):
+class Fusion(nn.Module):
     def __init__(self, channels):
         super().__init__()
         self.conv = nn.Conv1d(channels, channels, kernel_size=1)
@@ -186,9 +186,9 @@ class Classifier(nn.Module):
 class FinalEEGNet(nn.Module):
     def __init__(self, channels=60, num_classes=4):
         super().__init__()
-        self.dynamic_time = DynamicMultiScaleTimeConv(channels)
-        self.stacked_time = DeepStackedTemporalConv(channels)
-        self.channel_mix = DynamicChannelFusion(channels)
+        self.dynamic_time = DeepTemporalBlock(channels)
+        self.stacked_time = MsConvBlock(channels)
+        self.channel_mix =  Fusion(channels)
 
         self.bn_time = nn.BatchNorm1d(channels)
         self.bn_channel = nn.BatchNorm1d(channels)
@@ -274,7 +274,7 @@ def train(model, train_loader, val_loader, device, num_epochs=50, lr=1e-3):
 
         print(f"Epoch {epoch}/{num_epochs} | "
               f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
-              )
+              f"Val Loss: {val_loss:.4f}")
 
         # 保存最优模型
         if val_acc > best_acc:
